@@ -1,0 +1,141 @@
+// ============================================================
+// Four-Floor Dual Elevator System
+// FPGA-based Elevator Controller (Verilog HDL)
+// ============================================================
+module Elevator_system(
+    input clk,                 // Manual clock
+    input reset,                // Reset
+    input [1:0] floor_req,      // Binary floor request (00-11)
+    output [6:0] seg_A,         // Elevator A display
+    output [6:0] seg_B,         // Elevator B display
+    output reg up_arrow_A,
+    output reg down_arrow_A,
+    output reg up_arrow_B,
+    output reg down_arrow_B
+);
+
+// ─── Elevator Floor Registers ──────────────────────
+reg [1:0] elevatorA_floor;
+reg [1:0] elevatorB_floor;
+
+// ─── Requested Floor ──────────────────────
+reg [1:0] request_floor;
+
+// ─── Request Capture ──────────────────────
+always @(posedge clk or posedge reset)
+begin
+    if (reset)
+        request_floor <= 2'b00;
+    else
+        request_floor <= floor_req;
+end
+
+// ─── Distance Calculation ────────────────────────
+wire [2:0] distA;
+wire [2:0] distB;
+
+assign distA = (request_floor > elevatorA_floor) ?
+               ({1'b0, request_floor} - {1'b0, elevatorA_floor}) :
+               ({1'b0, elevatorA_floor} - {1'b0, request_floor});
+
+assign distB = (request_floor > elevatorB_floor) ?
+               ({1'b0, request_floor} - {1'b0, elevatorB_floor}) :
+               ({1'b0, elevatorB_floor} - {1'b0, request_floor});
+
+// ─── Elevator Movement ──────────────────────────
+always @(posedge clk or posedge reset)
+begin
+    if (reset)
+    begin
+        elevatorA_floor <= 2'b00; // Floor 0
+        elevatorB_floor <= 2'b11; // Floor 3
+    end
+    else
+    begin
+        if (distA <= distB)
+        begin
+            if (request_floor > elevatorA_floor)
+                elevatorA_floor <= elevatorA_floor + 2'b01;
+            else if (request_floor < elevatorA_floor)
+                elevatorA_floor <= elevatorA_floor - 2'b01;
+        end
+        else
+        begin
+            if (request_floor > elevatorB_floor)
+                elevatorB_floor <= elevatorB_floor + 2'b01;
+            else if (request_floor < elevatorB_floor)
+                elevatorB_floor <= elevatorB_floor - 2'b01;
+        end
+    end
+end
+
+// ─── Arrow Logic Elevator A ───────────────────────────────
+always @(*)
+begin
+    if (request_floor > elevatorA_floor)
+    begin
+        up_arrow_A   = 1'b1;
+        down_arrow_A = 1'b0;
+    end
+    else if (request_floor < elevatorA_floor)
+    begin
+        up_arrow_A   = 1'b0;
+        down_arrow_A = 1'b1;
+    end
+    else
+    begin
+        up_arrow_A   = 1'b0;
+        down_arrow_A = 1'b0;
+    end
+end
+
+// ─── Arrow Logic Elevator B ───────────────────────────────
+always @(*)
+begin
+    if (request_floor > elevatorB_floor)
+    begin
+        up_arrow_B   = 1'b1;
+        down_arrow_B = 1'b0;
+    end
+    else if (request_floor < elevatorB_floor)
+    begin
+        up_arrow_B   = 1'b0;
+        down_arrow_B = 1'b1;
+    end
+    else
+    begin
+        up_arrow_B   = 1'b0;
+        down_arrow_B = 1'b0;
+    end
+end
+
+// ─── 7-Segment Display Modules ────────────────────────────
+seven_segment_decoder decoder_A (
+    .floor(elevatorA_floor),
+    .seg(seg_A)
+);
+
+seven_segment_decoder decoder_B (
+    .floor(elevatorB_floor),
+    .seg(seg_B)
+);
+
+endmodule
+
+
+// ─── 7-Segment Decoder ────────────────────────
+module seven_segment_decoder(
+    input [1:0] floor,
+    output reg [6:0] seg
+);
+always @(*)
+begin
+    case(floor)
+        2'b00: seg = 7'b1000000; // 0
+        2'b01: seg = 7'b1111001; // 1
+        2'b10: seg = 7'b0100100; // 2
+        2'b11: seg = 7'b0110000; // 3
+        default: seg = 7'b1111111;
+    endcase
+end
+endmodule
